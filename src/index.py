@@ -31,7 +31,7 @@ CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 raw_owners = os.getenv("OWNER_IDS")
 OWNER_IDS = [int(id.strip()) for id in raw_owners.split(",")]
 
-INTERVALO = 2
+INTERVALO = 1
 
 intents = discord.Intents.default()
 intents.message_content = True  
