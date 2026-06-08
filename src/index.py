@@ -3,6 +3,24 @@ import asyncio
 import os
 from dotenv import load_dotenv
 
+from flask import Flask
+from threading import Thread
+import os
+
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot está vivo y pingueando! 🚀"
+
+def run():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
 # --- CARGA DE CONFIGURACIÓN ---
 load_dotenv()
 
@@ -117,4 +135,5 @@ async def on_message(message):
         else:
             await message.channel.send("El bucle ya estaba apagado.")
 
+keep_alive()
 client.run(TOKEN)
