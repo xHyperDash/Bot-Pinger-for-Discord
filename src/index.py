@@ -31,7 +31,7 @@ CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 raw_owners = os.getenv("OWNER_IDS")
 OWNER_IDS = [int(id.strip()) for id in raw_owners.split(",")]
 
-INTERVALO = 1
+INTERVALO = 0.5
 
 intents = discord.Intents.default()
 intents.message_content = True  
@@ -39,10 +39,11 @@ client = discord.Client(intents=intents)
 
 loop_activo = False 
 usuario_actual = None
+mensaje_personalizado = ""
 
 # Función que envía los pings periódicos
 async def mandar_mensaje():
-    global loop_activo, usuario_actual
+    global loop_activo, usuario_actual, mensaje_personalizado
     channel = client.get_channel(CHANNEL_ID)
     if not channel:
         try:
@@ -54,7 +55,7 @@ async def mandar_mensaje():
         if usuario_actual:
             if channel:
                 try:
-                    await channel.send(f"{usuario_actual.mention} fah u manige 🗣️🔥🔥🔥")
+                    await channel.send(f"{usuario_actual.mention} {mensaje_personalizado}")
                 except discord.HTTPException as e:
                     print(f"❌ Error al enviar mensaje: {e}")
             else:
@@ -85,7 +86,7 @@ async def on_ready():
     print("------------------------------------------")
 @client.event
 async def on_message(message):
-    global loop_activo, usuario_actual
+    global loop_activo, usuario_actual, mensaje_personalizado
 
     if message.author == client.user:
         return
@@ -96,37 +97,40 @@ async def on_message(message):
     content = message.content.strip()
 
     if content.lower().startswith("!i"):
-        parts = content.split(maxsplit=1)
-        if len(parts) < 2:
-            await message.channel.send("❌ Debes especificar un ID o mención de usuario. Ejemplo: `!i <id_del_usuario>`")
+        parts = content.split(maxsplit=2)
+        if len(parts) < 3:
+            await message.channel.send("❌ Formato incorrecto. Debes usar: `!i <ping/ID> <mensaje>`")
             return
 
         argumento = parts[1].strip()
+        mensaje = parts[2].strip()
         target_user = None
 
-        if message.mentions:
-            target_user = message.mentions[0]
-        else:
-            cleaned_id = "".join(c for c in argumento if c.isdigit())
-            if cleaned_id:
-                try:
-                    user_id = int(cleaned_id)
+        cleaned_id = "".join(c for c in argumento if c.isdigit())
+        if cleaned_id:
+            try:
+                user_id = int(cleaned_id)
+                target_user = discord.utils.get(message.mentions, id=user_id)
+                if not target_user:
+                    target_user = client.get_user(user_id)
+                if not target_user:
                     target_user = await client.fetch_user(user_id)
-                except (ValueError, discord.NotFound, discord.HTTPException):
-                    pass
+            except (ValueError, discord.NotFound, discord.HTTPException):
+                pass
 
         if not target_user:
             await message.channel.send("❌ No pude encontrar a ese usuario.")
             return
 
         usuario_actual = target_user
+        mensaje_personalizado = mensaje
 
         if not loop_activo:
             loop_activo = True
             await message.channel.send(f"**Bot ON**: ah con que el hpta de {target_user.mention} no contesta")
             asyncio.create_task(mandar_mensaje())
         else:
-            await message.channel.send(f"**Usuario objetivo cambiado a**: {target_user.mention}.")
+            await message.channel.send(f"**Usuario objetivo cambiado a**: {target_user.mention}. **Mensaje**: {mensaje_personalizado}")
 
     elif content.lower() == "!p":
         if loop_activo:
