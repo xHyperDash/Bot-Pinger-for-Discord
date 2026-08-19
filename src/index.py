@@ -2,11 +2,10 @@ import discord
 import asyncio
 import os
 from dotenv import load_dotenv
-
 from flask import Flask
 from threading import Thread
-import os
 
+# --- SERVIDOR FLASK PARA KEEP ALIVE ---
 app = Flask('')
 
 @app.route('/')
@@ -25,13 +24,13 @@ def keep_alive():
 load_dotenv()
 
 TOKEN = os.getenv("DISCORD_TOKEN")
-# Convertimos el ID del canal a entero (int)
 CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
-# Convertimos la lista de IDs de texto a una lista de enteros
+
 raw_owners = os.getenv("OWNER_IDS")
 OWNER_IDS = [int(id.strip()) for id in raw_owners.split(",")]
 
-INTERVALO = 0.5
+# Subimos el intervalo a 1.5 segundos para evitar bloqueos por Rate Limit / Cloudflare
+INTERVALO = 1.5
 
 intents = discord.Intents.default()
 intents.message_content = True  
@@ -41,7 +40,7 @@ loop_activo = False
 usuario_actual = None
 mensaje_personalizado = ""
 
-# Función que envía los pings periódicos
+# --- BUCLE PRINCIPAL DE MENSAJES ---
 async def mandar_mensaje():
     global loop_activo, usuario_actual, mensaje_personalizado
     channel = client.get_channel(CHANNEL_ID)
@@ -57,33 +56,32 @@ async def mandar_mensaje():
                 try:
                     await channel.send(f"{usuario_actual.mention} {mensaje_personalizado}")
                 except discord.HTTPException as e:
-                    print(f"❌ Error al enviar mensaje: {e}")
+                    print(f"❌ Error al enviar mensaje en bucle: {e}")
             else:
                 print("❌ No se encontró el canal. Revisa el CHANNEL_ID.")
                 break
         await asyncio.sleep(INTERVALO)
 
+# --- EVENTOS DEL BOT ---
 @client.event
 async def on_ready():
     print(f"✅ Bot conectado como {client.user}")
     
-    # Intentamos obtener el nombre del canal
     canal = client.get_channel(CHANNEL_ID)
     nombre_canal = canal.name if canal else f"ID: {CHANNEL_ID} (Canal no encontrado)"
     print(f"📡 Canal objetivo: #{nombre_canal}")
 
-    # Traducimos los IDs de los Owners a nombres reales
     nombres_owners = []
     for owner_id in OWNER_IDS:
         try:
             user = await client.fetch_user(owner_id)
-            nombres_owners.append(user.name) # O user.display_name para el apodo
+            nombres_owners.append(user.name)
         except Exception:
             nombres_owners.append(f"Desconocido({owner_id})")
     
-    # Unimos los nombres con comas para que se vea bonito
     print(f"👑 Owners autorizados: {', '.join(nombres_owners)}")
     print("------------------------------------------")
+
 @client.event
 async def on_message(message):
     global loop_activo, usuario_actual, mensaje_personalizado
@@ -99,7 +97,10 @@ async def on_message(message):
     if content.lower().startswith("!i"):
         parts = content.split(maxsplit=2)
         if len(parts) < 3:
-            await message.channel.send("❌ Formato incorrecto. Debes usar: `!i <ping/ID> <mensaje>`")
+            try:
+                await message.channel.send("❌ Formato incorrecto. Debes usar: `!i <ping/ID> <mensaje>`")
+            except discord.HTTPException as e:
+                print(f"❌ Error al responder por sintaxis: {e}")
             return
 
         argumento = parts[1].strip()
@@ -119,7 +120,10 @@ async def on_message(message):
                 pass
 
         if not target_user:
-            await message.channel.send("❌ No pude encontrar a ese usuario.")
+            try:
+                await message.channel.send("❌ No pude encontrar a ese usuario.")
+            except discord.HTTPException as e:
+                print(f"❌ Error al responder por usuario no encontrado: {e}")
             return
 
         usuario_actual = target_user
@@ -127,17 +131,30 @@ async def on_message(message):
 
         if not loop_activo:
             loop_activo = True
-            await message.channel.send(f"**Bot ON**: ah con que el hpta de {target_user.mention} no contesta")
+            try:
+                await message.channel.send(f"**Bot ON**: ah con que el hpta de {target_user.mention} no contesta")
+            except discord.HTTPException as e:
+                print(f"❌ Error al encender el bot: {e}")
             asyncio.create_task(mandar_mensaje())
         else:
-            await message.channel.send(f"**Usuario objetivo cambiado a**: {target_user.mention}. **Mensaje**: {mensaje_personalizado}")
+            try:
+                await message.channel.send(f"**Usuario objetivo cambiado a**: {target_user.mention}. **Mensaje**: {mensaje_personalizado}")
+            except discord.HTTPException as e:
+                print(f"❌ Error al actualizar objetivo: {e}")
 
     elif content.lower() == "!p":
         if loop_activo:
             loop_activo = False
-            await message.channel.send("**Bot OFF**: El bucle se detuvo.")
+            try:
+                await message.channel.send("**Bot OFF**: El bucle se detuvo.")
+            except discord.HTTPException as e:
+                print(f"❌ Error al apagar el bot: {e}")
         else:
-            await message.channel.send("El bucle ya estaba apagado.")
+            try:
+                await message.channel.send("El bucle ya estaba apagado.")
+            except discord.HTTPException as e:
+                print(f"❌ Error de respuesta: {e}")
 
+# --- INICIALIZACIÓN ---
 keep_alive()
 client.run(TOKEN)
